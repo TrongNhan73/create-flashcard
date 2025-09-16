@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Home</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- SheetJS để đọc .xlsx ở client -->
+    <script
+      src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"
+      defer
+    ></script>
+    <style>
+      :root {
+        --primary: #4a90e2;
+        --bg1: #e0f7fa;
+        --bg2: #fff3e0;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial,
+          "Noto Sans JP", sans-serif;
+        background: linear-gradient(135deg, var(--bg1), var(--bg2));
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+      }
+      .wrap {
+        width: 100%;
+        max-width: 900px;
+        background: #fff;
+        border-radius: 18px;
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.15);
+        padding: 22px 22px 18px;
+      }
+      h1 {
+        margin: 0 0 12px;
+        font-size: 22px;
+        text-align: center;
+      }
+      .row {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .grid {
+        display: grid;
+        gap: 12px;
+        grid-template-columns: 1fr 1fr;
+      }
+      .grid-1 {
+        display: grid;
+        gap: 12px;
+        grid-template-columns: 1fr;
+      }
+      label {
+        font-weight: 600;
+        font-size: 14px;
+        color: #333;
+      }
+      input,
+      select {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid #d6d6d6;
+        border-radius: 10px;
+        font-size: 15px;
+        outline: none;
+      }
+      .hint {
+        font-size: 12px;
+        color: #666;
+        margin-top: 4px;
+      }
+      .mode {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin: 6px 0 2px;
+      }
+      .mode label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 600;
+      }
+      .actions {
+        display: flex;
+        gap: 10px;
+        margin-top: 8px;
+        flex-wrap: wrap;
+      }
+      .actions button,
+      .actions a {
+        padding: 12px 14px;
+        border: none;
+        border-radius: 10px;
+        color: #fff;
+        font-weight: 700;
+        background: linear-gradient(90deg, var(--primary), #357abd);
+        cursor: pointer;
+        transition: 0.2s;
+        text-decoration: none;
+        text-align: center;
+      }
+      .actions a.secondary {
+        background: linear-gradient(90deg, #28a745, #218838);
+      }
+      .actions button.warn {
+        background: linear-gradient(90deg, #e55353, #c53030);
+      }
+      .actions .ghost {
+        background: #eef2ff;
+        color: #243b6b;
+        border: 1px solid #c7d2fe;
+      }
+      button:disabled {
+        opacity: 0.65;
+        cursor: not-allowed;
+      }
+      .hidden {
+        display: none;
+      }
+      .note {
+        font-size: 12px;
+        color: #777;
+        margin-top: 6px;
+      }
+      canvas {
+        width: 100%;
+        height: auto;
+        display: block;
+        margin: 18px 0 10px;
+        border-radius: 16px;
+        box-shadow: 0 8px 22px rgba(0, 0, 0, 0.22);
+        background: #f7f7f7;
+      }
+      .footer {
+        font-size: 12px;
+        color: #777;
+        text-align: center;
+        margin-top: 10px;
+      }
+      .file-meta {
+        font-size: 13px;
+        color: #444;
+        margin-top: 6px;
+      }
+      .pager {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        margin-top: 8px;
+      }
+      .pager .idx {
+        font-weight: 700;
+      }
+      @media (max-width: 800px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="wrap">
+      <h1>🎴 Tạo Flashcard Nhật</h1>
+
+      <div class="grid-1">
+        <div>
+          <label for="apiKey">GIPHY API Key</label>
+          <input id="apiKey" type="text" placeholder="Nhập API key của bạn…" />
+          <div class="hint">
+            Khóa sẽ được lưu trong trình duyệt (localStorage).
+          </div>
+        </div>
+      </div>
+
+      <div class="mode">
+        <label
+          ><input type="radio" name="mode" value="manual" checked /> Nhập thủ
+          công</label
+        >
+        <label
+          ><input type="radio" name="mode" value="excel" /> Tải Excel/CSV</label
+        >
+      </div>
+
+      <!-- Nhập thủ công -->
+      <section id="manualSection">
+        <div class="grid">
+          <div>
+            <label for="kanji">Hán tự (có thể nhiều ký tự)</label>
+            <input id="kanji" type="text" placeholder="例: 日本語" />
+          </div>
+          <div>
+            <label for="hiragana">Hiragana</label>
+            <input id="hiragana" type="text" placeholder="にほんご" />
+          </div>
+          <div>
+            <label for="meaning">Nghĩa (tiếng Việt)</label>
+            <input id="meaning" type="text" placeholder="tiếng Nhật" />
+          </div>
+          <div>
+            <label for="query">Từ khóa tìm GIPHY (để trống = dùng Nghĩa)</label>
+            <input id="query" type="text" placeholder="ví dụ: japan language" />
+          </div>
+        </div>
+      </section>
+
+      <!-- Excel/CSV -->
+      <section id="excelSection" class="hidden">
+        <div class="row">
+          <div style="flex: 1 1 360px">
+            <label for="excelFile">Chọn file Excel (.xlsx) hoặc CSV</label>
+            <input id="excelFile" type="file" accept=".xlsx,.csv" />
+            <div class="hint">
+              Cột chấp nhận: <b>Kanji/Hán tự</b>, <b>Hiragana</b>,
+              <b>Meaning/Nghĩa</b>. Hàng đầu tiên nên là tiêu đề.
+            </div>
+            <div class="file-meta" id="fileMeta"></div>
+          </div>
+        </div>
+
+        <div class="pager hidden" id="pager">
+          <button id="prevBtn" class="ghost">◀ Prev</button>
+          <span
+            >Record: <span class="idx" id="recIdx">0</span>/<span id="recTotal"
+              >0</span
+            ></span
+          >
+          <button id="nextBtn" class="ghost">Next ▶</button>
+          <button id="exportAnkiBtn" class="ghost">
+            Xuất TXT (Anki – 3 thẻ/record)
+          </button>
+        </div>
+      </section>
+
+      <div class="row" style="margin-top: 8px">
+        <div style="flex: 1 1 260px">
+          <label for="overlay">Tùy chọn hiển thị</label>
+          <div class="row">
+            <label
+              ><input id="overlay" type="checkbox" checked /> Lớp mờ giúp dễ
+              đọc</label
+            >
+            <label
+              ><input id="shadow" type="checkbox" checked /> Đổ bóng chữ</label
+            >
+            <label><input id="darken" type="checkbox" /> Tối nền (20%)</label>
+            <label
+              ><input id="blurBg" type="checkbox" /> Làm mờ nền (4px)</label
+            >
+          </div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="genBtn">Tạo ảnh</button>
+        <a id="downloadLink" class="secondary hidden" download="flashcard.png"
+          >⬇ Tải ảnh PNG</a
+        >
+        <button id="clearBtn" class="warn">Xóa canvas</button>
+      </div>
+      <div class="note">Nền lấy từ GIPHY theo Nghĩa (hoặc Query)</div>
+
+      <!-- Canvas dọc 1080x1920 -->
+      <canvas id="cardCanvas" width="1080" height="1920"></canvas>
+
+      <div class="footer">© TrongNhan73-ELL</div>
+    </main>
+
+    <script>
+      // ===== DOM helpers =====
+      const $ = (id) => document.getElementById(id);
+      const apiKeyEl = $("apiKey");
+      const modeRadios = document.getElementsByName("mode");
+      const manualSection = $("manualSection");
+      const excelSection = $("excelSection");
+      const excelFileEl = $("excelFile");
+      const fileMetaEl = $("fileMeta");
+      const pager = $("pager");
+      const recIdxEl = $("recIdx");
+      const recTotalEl = $("recTotal");
+      const exportAnkiBtn = $("exportAnkiBtn");
+
+      const kanjiEl = $("kanji");
+      const hiraEl = $("hiragana");
+      const meanEl = $("meaning");
+      const queryEl = $("query");
+
+      const overlayEl = $("overlay");
+      const shadowEl = $("shadow");
+      const darkenEl = $("darken");
+      const blurBgEl = $("blurBg");
+
+      const genBtn = $("genBtn");
+      const clearBtn = $("clearBtn");
+      const dl = $("downloadLink");
+
+      const canvas = $("cardCanvas");
+      const ctx = canvas.getContext("2d");
+
+      // Storage API key
+      apiKeyEl.value = localStorage.getItem("giphy_api_key") || "";
+      apiKeyEl.addEventListener("change", () => {
+        localStorage.setItem("giphy_api_key", apiKeyEl.value.trim());
+      });
+
+      // Mode switch
+      for (const r of modeRadios) {
+        r.addEventListener("change", onModeChange);
+      }
+      function onModeChange() {
+        const mode = getMode();
+        manualSection.classList.toggle("hidden", mode !== "manual");
+        excelSection.classList.toggle("hidden", mode !== "excel");
+        if (mode === "excel") {
+          dl.classList.add("hidden");
+        }
+      }
+      function getMode() {
+        for (const r of modeRadios) {
+          if (r.checked) return r.value;
+        }
+        return "manual";
+      }
+
+      // Initial canvas
+      drawFallback();
+
+      function drawFallback() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const g = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+        g.addColorStop(0, "#fdfbfb");
+        g.addColorStop(1, "#ebedee");
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+
+      // ===== Giphy =====
+      async function getGiphyStill(query, apiKey) {
+        const endpoint = new URL("https://api.giphy.com/v1/gifs/search");
+        endpoint.searchParams.set("api_key", apiKey);
+        endpoint.searchParams.set("q", query);
+        endpoint.searchParams.set("limit", "1");
+        endpoint.searchParams.set("rating", "g");
+        endpoint.searchParams.set("lang", "vi");
+        try {
+          const res = await fetch(endpoint.toString());
+          if (!res.ok) throw new Error("GIPHY HTTP " + res.status);
+          const json = await res.json();
+          const item = json?.data?.[0];
+          if (!item) return null;
+          const imgs = item.images || {};
+          return (
+            imgs.downsized_still?.url ||
+            imgs.original_still?.url ||
+            imgs.preview_gif?.url ||
+            imgs.downsized_large?.url ||
+            imgs.original?.url ||
+            null
+          );
+        } catch (e) {
+          console.warn("GIPHY fetch failed:", e);
+          return null;
+        }
+      }
+      async function loadImageAsBlobURL(url) {
+        try {
+          const res = await fetch(url, { mode: "cors" });
+          if (!res.ok) throw new Error("IMG HTTP " + res.status);
+          const blob = await res.blob();
+          return URL.createObjectURL(blob);
+        } catch (e) {
+          console.warn("Image blob load failed:", e);
+          return null;
+        }
+      }
+      function drawImageCover(img) {
+        const cw = canvas.width,
+          ch = canvas.height;
+        const iw = img.naturalWidth || img.width,
+          ih = img.naturalHeight || img.height;
+        const cr = cw / ch,
+          ir = iw / ih;
+        let sx = 0,
+          sy = 0,
+          sw = iw,
+          sh = ih;
+        if (ir > cr) {
+          sh = ih;
+          sw = ih * cr;
+          sx = (iw - sw) / 2;
+          sy = 0;
+        } else {
+          sw = iw;
+          sh = iw / cr;
+          sx = 0;
+          sy = (ih - sh) / 2;
+        }
+        ctx.drawImage(img, sx, sy, sw, sh, 0, 0, cw, ch);
+      }
+      function applyBgFilters() {
+        ctx.filter = blurBgEl.checked ? "blur(4px)" : "none";
+      }
+      function clearFilters() {
+        ctx.filter = "none";
+      }
+      function overlaysOnly() {
+        if (overlayEl.checked) {
+          ctx.fillStyle = "rgba(255,255,255,.32)";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+        if (darkenEl.checked) {
+          ctx.fillStyle = "rgba(0,0,0,.20)";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+      }
+
+      // ===== KanjiVG =====
+      function toHex5FromChar(ch) {
+        if (!ch) return null;
+        const cp = ch.codePointAt(0);
+        if (!cp) return null;
+        return cp.toString(16).toLowerCase().padStart(5, "0");
+      }
+      async function fetchKanjiSVGText(hex5) {
+        const url = `https://kanjivg.tagaini.net/kanjivg/kanji/${hex5}.svg`;
+        try {
+          const res = await fetch(url, { mode: "cors" });
+          if (!res.ok) throw new Error("KanjiVG HTTP " + res.status);
+          return await res.text();
+        } catch (e) {
+          console.warn("KanjiVG fetch failed:", e);
+          return null;
+        }
+      }
+
+      // ==== Khu nét viết chiếm ~1/3 chiều cao ảnh ====
+      // Tính lưới tối ưu để tile vuông to nhất trong panel 1/3 chiều cao
+      function computeGridLayout(n, panelW, panelH, gap) {
+        // thử số cột từ 1..min(n,8), chọn tile lớn nhất
+        let best = { cols: 1, rows: n, size: 0 };
+        const maxCols = Math.min(8, Math.max(1, n));
+        for (let cols = 1; cols <= maxCols; cols++) {
+          const rows = Math.ceil(n / cols);
+          // với mỗi cấu hình, tính kích thước tile vuông tối đa
+          const availW = panelW - (cols - 1) * gap;
+          const availH = panelH - (rows - 1) * gap;
+          const sizeW = Math.floor(availW / cols);
+          const sizeH = Math.floor(availH / rows);
+          const size = Math.min(sizeW, sizeH);
+          if (size > best.size) {
+            best = { cols, rows, size };
+          }
+        }
+        return best;
+      }
+
+      async function drawKanjiPanel(kanjiList) {
+        if (!kanjiList.length) return;
+
+        // panel chiếm ~1/3 chiều cao, sát đáy – không title, không border
+        const padX = Math.round(canvas.width * 0.04); // lề ngang
+        const padY = Math.round(canvas.height * 0.02); // lề dọc
+        const panelH = Math.round(canvas.height * 0.33);
+        const panelY = canvas.height - panelH - padY;
+        const panelX = padX;
+        const panelW = canvas.width - padX * 2;
+
+        // nền “kính” nhẹ để nổi nét viết
+        // ctx.save();
+        // ctx.fillStyle = "rgba(255,255,255,.78)";
+        // ctx.fillRect(panelX, panelY, panelW, panelH);
+        // ctx.restore();
+
+        // Tính lưới tối ưu
+        const gap = Math.max(12, Math.round(canvas.width * 0.012));
+        const {
+          cols,
+          rows,
+          size: tile,
+        } = computeGridLayout(kanjiList.length, panelW, panelH, gap);
+
+        // Tọa độ bắt đầu để lưới nằm giữa panel
+        const gridW = cols * tile + (cols - 1) * gap;
+        const gridH = rows * tile + (rows - 1) * gap + 24; // +24 label dưới mỗi ô
+        const startX = panelX + Math.round((panelW - gridW) / 2);
+        const startY = panelY + Math.round((panelH - gridH) / 2);
+
+        // Vẽ từng ô
+        for (let i = 0; i < kanjiList.length; i++) {
+          const r = Math.floor(i / cols);
+          const c = i % cols;
+          const ox = startX + c * (tile + gap);
+          const oy = startY + r * (tile + 24 + gap);
+
+          // nền nhẹ ô
+          ctx.save();
+          ctx.fillStyle = "#f3f4f6";
+          ctx.fillRect(ox, oy, tile, tile);
+          ctx.restore();
+
+          // load SVG -> image
+          const hex5 = toHex5FromChar(kanjiList[i]);
+          if (hex5) {
+            const svg = await fetchKanjiSVGText(hex5);
+            if (svg) {
+              const objURL = URL.createObjectURL(
+                new Blob([svg], { type: "image/svg+xml" })
+              );
+              await drawContain(objURL, ox, oy, tile, tile);
+              URL.revokeObjectURL(objURL);
+            }
+          }
+
+          // // nhãn ký tự
+          // ctx.save();
+          // ctx.textAlign = "center";
+          // ctx.fillStyle = "#1f2937";
+          // ctx.font = `700 ${Math.max(22, Math.round(canvas.width*0.024))}px "Noto Sans JP", system-ui, Arial`;
+          // ctx.fillText(kanjiList[i], ox + tile/2, oy + tile + 20);
+          // ctx.restore();
+        }
+      }
+
+      async function drawContain(objURL, x, y, w, h) {
+        const img = new Image();
+        await new Promise((res) => {
+          img.onload = res;
+          img.onerror = res;
+          img.src = objURL;
+        });
+        if (!img.width || !img.height) return;
+        const ir = img.width / img.height,
+          br = w / h;
+        let dw, dh, dx, dy;
+        if (ir > br) {
+          dw = w;
+          dh = dw / ir;
+          dx = x;
+          dy = y + (h - dh) / 2;
+        } else {
+          dh = h;
+          dw = dh * ir;
+          dx = x + (w - dw) / 2;
+          dy = y;
+        }
+        ctx.drawImage(img, dx, dy, dw, dh);
+      }
+
+      // ===== Text drawing (centered, no border/stars) =====
+      function drawTextsCenter(kanjiText, hira, meaning) {
+        const cw = canvas.width,
+          ch = canvas.height;
+
+        if (shadowEl.checked) {
+          ctx.shadowColor = "rgba(0,0,0,.35)";
+          ctx.shadowBlur = Math.max(10, Math.round(cw * 0.012));
+          ctx.shadowOffsetY = Math.max(3, Math.round(cw * 0.004));
+        } else {
+          ctx.shadowColor = "transparent";
+          ctx.shadowBlur = 0;
+          ctx.shadowOffsetY = 0;
+        }
+
+        // Kanji nhiều ký tự: co giãn để <= 80% bề rộng, đặt ở 0.36 chiều cao (để chừa 1/3 panel dưới)
+        const maxWidth = cw * 0.8;
+        let fontSize = Math.max(120, Math.round(cw * 0.2));
+        ctx.textAlign = "center";
+        ctx.fillStyle = "#111827";
+        ctx.font = `800 ${fontSize}px "Hiragino Kaku Gothic ProN","Yu Gothic","Noto Sans JP",system-ui,Arial`;
+        while (ctx.measureText(kanjiText).width > maxWidth && fontSize > 40) {
+          fontSize -= 4;
+          ctx.font = `800 ${fontSize}px "Hiragino Kaku Gothic ProN","Yu Gothic","Noto Sans JP",system-ui,Arial`;
+        }
+        const kanjiY = ch * 0.36;
+        ctx.fillText(kanjiText, cw / 2, kanjiY);
+
+        // Hiragana
+        const hiraSize = Math.max(44, Math.round(cw * 0.06));
+        ctx.font = `700 ${hiraSize}px "Hiragino Kaku Gothic ProN","Yu Gothic","Noto Sans JP",system-ui,Arial`;
+        ctx.fillStyle = "#1f2937";
+        const hiraY = kanjiY + fontSize * 0.65;
+        ctx.fillText(hira || "", cw / 2, hiraY);
+
+        // Meaning (wrap)
+        const meanSize = Math.max(36, Math.round(cw * 0.045));
+        ctx.font = `600 ${meanSize}px system-ui, Segoe UI, Arial`;
+        ctx.fillStyle = "#374151";
+        wrapCentered(
+          meaning || "",
+          cw / 2,
+          hiraY + meanSize * 1.6,
+          cw * 0.86,
+          meanSize * 1.25
+        );
+
+        // reset shadow
+        ctx.shadowColor = "transparent";
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetY = 0;
+      }
+      function wrapCentered(text, cx, startY, maxWidth, lineH) {
+        if (!text) return;
+        const words = text.split(/\s+/);
+        let line = "",
+          y = startY,
+          lines = [];
+        for (const w of words) {
+          const t = line ? line + " " + w : w;
+          if (ctx.measureText(t).width > maxWidth && line) {
+            lines.push(line);
+            line = w;
+          } else line = t;
+        }
+        if (line) lines.push(line);
+        ctx.textAlign = "center";
+        for (const ln of lines) {
+          ctx.fillText(ln, cx, y);
+          y += lineH;
+        }
+      }
+
+      // ===== Excel/CSV parsing =====
+      let dataset = []; // [{kanji,hira,meaning}]
+      let recIdx = 0;
+
+      excelFileEl?.addEventListener("change", async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) {
+          return;
+        }
+        dataset = [];
+        recIdx = 0;
+        fileMetaEl.textContent = "Đang đọc file…";
+        try {
+          if (file.name.toLowerCase().endsWith(".csv")) {
+            const text = await file.text();
+            dataset = parseCSVToDataset(text);
+          } else {
+            const ab = await file.arrayBuffer();
+            if (typeof XLSX === "undefined") {
+              alert("Không tải được thư viện XLSX.");
+              return;
+            }
+            const wb = XLSX.read(ab, { type: "array" });
+            const first = wb.SheetNames[0];
+            const sheet = wb.Sheets[first];
+            const rows = XLSX.utils.sheet_to_json(sheet, {
+              header: 1,
+              raw: true,
+            });
+            dataset = normalizeRows(rows);
+          }
+        } catch (err) {
+          console.error(err);
+          alert("Không đọc được file. Vui lòng kiểm tra định dạng.");
+          fileMetaEl.textContent = "";
+          return;
+        }
+        fileMetaEl.textContent = `Đã đọc ${dataset.length} dòng hợp lệ.`;
+        recTotalEl.textContent = dataset.length;
+        recIdxEl.textContent = dataset.length ? 1 : 0;
+        pager.classList.toggle("hidden", dataset.length === 0);
+        dl.classList.add("hidden");
+      });
+
+      function parseCSVToDataset(text) {
+        const rows = text
+          .split(/\r?\n/)
+          .filter((l) => l.trim().length > 0)
+          .map((line) => {
+            const sep = line.includes("\t") ? "\t" : ",";
+            return splitCSV(line, sep);
+          });
+        return normalizeRows(rows);
+      }
+      function splitCSV(line, sep) {
+        if (sep === "\t") return line.split("\t");
+        const out = [];
+        let cur = "",
+          inQ = false;
+        for (let i = 0; i < line.length; i++) {
+          const ch = line[i];
+          if (ch === '"') {
+            if (inQ && line[i + 1] === '"') {
+              cur += '"';
+              i++;
+            } else inQ = !inQ;
+          } else if (ch === sep && !inQ) {
+            out.push(cur);
+            cur = "";
+          } else cur += ch;
+        }
+        out.push(cur);
+        return out;
+      }
+      function normalizeRows(rows) {
+        if (!rows.length) return [];
+        const header = rows[0].map((h) =>
+          String(h || "")
+            .trim()
+            .toLowerCase()
+        );
+        let idxKanji = -1,
+          idxHira = -1,
+          idxMean = -1;
+        const picks = [
+          {
+            keys: ["kanji", "hán tự", "han tu", "漢字"],
+            set: (i) => (idxKanji = i),
+          },
+          {
+            keys: ["hiragana", "ふりがな", "ふりがな/ひらがな", "kana"],
+            set: (i) => (idxHira = i),
+          },
+          {
+            keys: ["meaning", "nghĩa", "nghia", "意味", "y nghia"],
+            set: (i) => (idxMean = i),
+          },
+        ];
+        for (let i = 0; i < header.length; i++) {
+          const h = header[i];
+          for (const p of picks) {
+            if (p.keys.some((k) => h.includes(k))) p.set(i);
+          }
+        }
+        if (idxKanji < 0 && header.length >= 1) idxKanji = 0;
+        if (idxHira < 0 && header.length >= 2) idxHira = 1;
+        if (idxMean < 0 && header.length >= 3) idxMean = 2;
+
+        const data = [];
+        for (let r = 1; r < rows.length; r++) {
+          const row = rows[r] || [];
+          const kanji = (row[idxKanji] ?? "").toString().trim();
+          const hira = (row[idxHira] ?? "").toString().trim();
+          const mean = (row[idxMean] ?? "").toString().trim();
+          if (kanji || hira || mean) {
+            data.push({ kanji, hira, meaning: mean });
+          }
+        }
+        return data.filter((d) => d.kanji); // cần ít nhất kanji
+      }
+
+      // Pager
+      $("prevBtn")?.addEventListener("click", () => {
+        if (!dataset.length) return;
+        recIdx = Math.max(0, recIdx - 1);
+        recIdxEl.textContent = recIdx + 1;
+        dl.classList.add("hidden");
+      });
+      $("nextBtn")?.addEventListener("click", () => {
+        if (!dataset.length) return;
+        recIdx = Math.min(dataset.length - 1, recIdx + 1);
+        recIdxEl.textContent = recIdx + 1;
+        dl.classList.add("hidden");
+      });
+
+      // ===== Export TXT (Anki) — 3 thẻ/record =====
+      // Mỗi record tạo 3 dòng:
+      // 1) Kanji \t Hiragana \t kanji,hiragana
+      // 2) Kanji \t Meaning  \t kanji,nghĩa
+      // 3) Hiragana \t Meaning \t hiragana,nghĩa
+      exportAnkiBtn?.addEventListener("click", () => {
+        if (!dataset.length) {
+          alert("Chưa có dữ liệu từ Excel/CSV.");
+          return;
+        }
+        const lines = [];
+        for (const r of dataset) {
+          const A = (r.kanji ?? "").toString().trim();
+          const B = (r.hira ?? "").toString().trim();
+          const C = (r.meaning ?? "").toString().trim();
+          if (A && B) lines.push(`${A}\t${B}\tkanji,hiragana`);
+          if (A && C) lines.push(`${A}\t${C}\tkanji,nghĩa`);
+          if (B && C) lines.push(`${B}\t${C}\thiragana,nghĩa`);
+        }
+        if (!lines.length) {
+          alert("Không có dòng hợp lệ để xuất.");
+          return;
+        }
+        const blob = new Blob([lines.join("\n")], {
+          type: "text/plain;charset=utf-8",
+        });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "anki_cards.txt";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      });
+
+      // ===== Generate image (manual or excel current row) =====
+      genBtn.addEventListener("click", async () => {
+        const apiKey = apiKeyEl.value.trim();
+        if (!apiKey) {
+          alert("Vui lòng nhập GIPHY API key.");
+          return;
+        }
+
+        let kanjiText, hira, meaning, query;
+        if (getMode() === "manual") {
+          kanjiText = (kanjiEl.value || "").trim();
+          hira = (hiraEl.value || "").trim();
+          meaning = (meanEl.value || "").trim();
+          query = (queryEl.value || "").trim() || meaning || hira || kanjiText;
+          if (!kanjiText) {
+            alert("Vui lòng nhập Hán tự.");
+            return;
+          }
+        } else {
+          if (!dataset.length) {
+            alert("Vui lòng tải Excel/CSV trước.");
+            return;
+          }
+          const row = dataset[recIdx] || dataset[0];
+          kanjiText = (row.kanji || "").trim();
+          hira = (row.hira || "").trim();
+          meaning = (row.meaning || "").trim();
+          query = meaning || hira || kanjiText;
+        }
+
+        genBtn.disabled = true;
+        genBtn.textContent = "Đang tạo…";
+        dl.classList.add("hidden");
+
+        // Background
+        drawFallback();
+        const gURL = await getGiphyStill(query, apiKey);
+        let objURL = null;
+        if (gURL) objURL = await loadImageAsBlobURL(gURL);
+
+        if (objURL) {
+          applyBgFilters();
+          await drawFromURL(objURL, drawImageCover);
+          clearFilters();
+          URL.revokeObjectURL(objURL);
+        }
+        overlaysOnly();
+
+        // Texts
+        drawTextsCenter(kanjiText, hira, meaning);
+
+        // Kanji strokes panel (1/3 chiều cao)
+        const kanjiList = [...kanjiText].filter((ch) => /\S/.test(ch));
+        await drawKanjiPanel(kanjiList);
+
+        // Enable download
+        const name = [kanjiText, hira, meaning].filter(Boolean).join("_");
+        const safe = (name || "flashcard")
+          .toLowerCase()
+          .replace(/[^\p{L}\p{N}_-]+/gu, "-")
+          .replace(/-+/g, "-");
+        dl.href = canvas.toDataURL("image/png");
+        dl.download = `${safe}.png`;
+        dl.classList.remove("hidden");
+
+        genBtn.disabled = false;
+        genBtn.textContent = "Tạo ảnh";
+      });
+
+      async function drawFromURL(objURL, drawFn) {
+        const img = new Image();
+        await new Promise((res) => {
+          img.onload = res;
+          img.onerror = res;
+          img.src = objURL;
+        });
+        if (img.width && img.height) drawFn(img);
+      }
+
+      clearBtn.addEventListener("click", () => {
+        drawFallback();
+        dl.classList.add("hidden");
+      });
+    </script>
+  </body>
+</html>
