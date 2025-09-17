@@ -353,7 +353,120 @@
       ctx.drawImage(img, dx,dy,dw,dh);
     }
 
-    // ===== Text drawing (centered) =====
+    // ===== Helpers: vẽ nền sáng bo góc sau chữ =====
+    function roundRectPath(ctx, x, y, w, h, r){
+      const rr = Math.min(r, w/2, h/2);
+      ctx.beginPath();
+      ctx.moveTo(x+rr, y);
+      ctx.arcTo(x+w, y, x+w, y+h, rr);
+      ctx.arcTo(x+w, y+h, x, y+h, rr);
+      ctx.arcTo(x, y+h, x, y, rr);
+      ctx.arcTo(x, y, x+w, y, rr);
+      ctx.closePath();
+    }
+    function drawTextWithBg(text, cx, baselineY, options){
+      // options: {font, textColor, bgColor, padding}
+      const { font, textColor="#111827", bgColor="rgba(255,255,255,.85)", padding=16, radius=18 } = options || {};
+      ctx.save();
+      ctx.font = font;
+      ctx.textAlign = "center";
+      // đo
+      const metrics = ctx.measureText(text);
+      const ascent = metrics.actualBoundingBoxAscent || parseInt(font,10)*0.8;
+      const descent = metrics.actualBoundingBoxDescent || parseInt(font,10)*0.2;
+      const textW = metrics.width;
+      const textH = ascent + descent;
+
+      // vẽ nền (không áp dụng shadow của chữ)
+      const x = cx - textW/2 - padding;
+      const y = baselineY - ascent - padding;
+      const w = textW + padding*2;
+      const h = textH + padding*2;
+
+      const prevShadowColor = ctx.shadowColor;
+      const prevShadowBlur = ctx.shadowBlur;
+      const prevShadowOffsetY = ctx.shadowOffsetY;
+      // tắt shadow khi vẽ nền
+      ctx.shadowColor = "transparent";
+      ctx.shadowBlur = 0;
+      ctx.shadowOffsetY = 0;
+
+      ctx.fillStyle = bgColor;
+      roundRectPath(ctx, x, y, w, h, radius);
+      ctx.fill();
+
+      // vẽ chữ (khôi phục shadow)
+      ctx.shadowColor = prevShadowColor;
+      ctx.shadowBlur = prevShadowBlur;
+      ctx.shadowOffsetY = prevShadowOffsetY;
+
+      ctx.fillStyle = textColor;
+      ctx.fillText(text, cx, baselineY);
+      ctx.restore();
+    }
+function drawWrappedBlockWithBg(text, cx, firstBaselineY, maxWidth, lineSizePx){
+  // Vẽ nền bo góc + chữ nhiều dòng cho Meaning
+  // text: chuỗi nghĩa; cx: toạ độ giữa; firstBaselineY: baseline dòng 1
+  // maxWidth: bề rộng tối đa; lineSizePx: cỡ chữ (px)
+  const font = `600 ${lineSizePx}px system-ui, Segoe UI, Arial`;
+  const lineH = lineSizePx * 1.25;
+
+  ctx.save();
+  ctx.font = font;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "alphabetic";  // quan trọng để đo đạc ổn định
+  ctx.globalCompositeOperation = "source-over";
+
+  // wrap text -> lines
+  const words = (text || "").split(/\s+/).filter(Boolean);
+  let lines = [], line = "";
+  for (const w of words) {
+    const t = line ? `${line} ${w}` : w;
+    if (ctx.measureText(t).width > maxWidth && line) {
+      lines.push(line);
+      line = w;
+    } else line = t;
+  }
+  if (line) lines.push(line);
+  if (!lines.length) { ctx.restore(); return; }
+
+  // đo chiều rộng lớn nhất
+  let maxLineW = 0;
+  for (const ln of lines) maxLineW = Math.max(maxLineW, ctx.measureText(ln).width);
+
+  // ước lượng ascent/descent
+  const ascent = lineSizePx * 0.8;
+  const descent = lineSizePx * 0.2;
+  const textBlockH = lines.length * lineH;
+  const padding = Math.max(12, Math.round(lineSizePx * 0.25));
+  const radius = 14;
+
+  // khung nền (đặt theo dòng đầu tiên)
+  const x = cx - maxLineW / 2 - padding;
+  const y = firstBaselineY - ascent - padding;
+  const w = maxLineW + padding * 2;
+  const h = textBlockH + padding * 2;
+
+  // vẽ nền sáng (tắt shadow của chữ để nền không bị mờ)
+  const prevShadow = { color: ctx.shadowColor, blur: ctx.shadowBlur, offY: ctx.shadowOffsetY };
+  ctx.shadowColor = "transparent"; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+
+  ctx.fillStyle = "rgba(255,255,255,0.92)";
+  roundRectPath(ctx, x, y, w, h, radius);
+  ctx.fill();
+
+  // khôi phục shadow và vẽ chữ
+  ctx.shadowColor = prevShadow.color; ctx.shadowBlur = prevShadow.blur; ctx.shadowOffsetY = prevShadow.offY;
+  ctx.fillStyle = "#374151";
+  let yCursor = firstBaselineY;
+  for (const ln of lines) {
+    ctx.fillText(ln, cx, yCursor);
+    yCursor += lineH;
+  }
+  ctx.restore();
+}
+
+    // ===== Text drawing (centered) — CÓ nền sáng sau chữ =====
     function drawTextsCenter(kanjiText, hira, meaning){
       const cw = canvas.width, ch = canvas.height;
 
@@ -365,52 +478,71 @@
         ctx.shadowColor = "transparent"; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
       }
 
+      // Kanji (co giãn <= 80% bề rộng)
       const maxWidth = cw * 0.80;
       let fontSize = Math.max(120, Math.round(cw * 0.20));
-      ctx.textAlign = "center";
-      ctx.fillStyle = "#111827";
-      ctx.font = `800 ${fontSize}px "Hiragino Kaku Gothic ProN","Yu Gothic","Noto Sans JP",system-ui,Arial`;
+      let font = `800 ${fontSize}px "Hiragino Kaku Gothic ProN","Yu Gothic","Noto Sans JP",system-ui,Arial`;
+      ctx.font = font;
       while(ctx.measureText(kanjiText).width > maxWidth && fontSize > 40){
         fontSize -= 4;
-        ctx.font = `800 ${fontSize}px "Hiragino Kaku Gothic ProN","Yu Gothic","Noto Sans JP",system-ui,Arial`;
+        font = `800 ${fontSize}px "Hiragino Kaku Gothic ProN","Yu Gothic","Noto Sans JP",system-ui,Arial`;
+        ctx.font = font;
       }
       const kanjiY = ch * 0.36;
-      ctx.fillText(kanjiText, cw/2, kanjiY);
+      drawTextWithBg(kanjiText, cw/2, kanjiY, {
+        font,
+        textColor:"#111827",
+        bgColor:"rgba(255,255,255,.88)",
+        padding: Math.max(16, Math.round(fontSize*0.18)),
+        radius: Math.max(16, Math.round(fontSize*0.12))
+      });
 
+      // Hiragana
       const hiraSize = Math.max(44, Math.round(cw*0.06));
-      ctx.font = `700 ${hiraSize}px "Hiragino Kaku Gothic ProN","Yu Gothic","Noto Sans JP",system-ui,Arial`;
-      ctx.fillStyle = "#1f2937";
+      const hiraFont = `700 ${hiraSize}px "Hiragino Kaku Gothic ProN","Yu Gothic","Noto Sans JP",system-ui,Arial`;
       const hiraY = kanjiY + fontSize * 0.65;
-      ctx.fillText(hira || "", cw/2, hiraY);
+      drawTextWithBg(hira || "", cw/2, hiraY, {
+        font: hiraFont,
+        textColor:"#1f2937",
+        bgColor:"rgba(255,255,255,.86)",
+        padding: Math.max(12, Math.round(hiraSize*0.22)),
+        radius: 14
+      });
 
-      const meanSize = Math.max(36, Math.round(cw*0.045));
-      ctx.font = `600 ${meanSize}px system-ui, Segoe UI, Arial`;
-      ctx.fillStyle = "#374151";
-      wrapCentered(meaning || "", cw/2, hiraY + meanSize * 1.6, cw*0.86, meanSize*1.25);
+      // Meaning (wrap)
+      // Meaning (có nền sáng + wrap)
+const meanSize = Math.max(36, Math.round(cw * 0.045));
+const meanFont = `600 ${meanSize}px system-ui, Segoe UI, Arial`;
+const firstY = hiraY + meanSize * 1.6;
+// gọi hàm mới: text, centerX, baseline dòng đầu, maxWidth, fontSize
+drawWrappedBlockWithBg(meaning || "", cw / 2, firstY, cw * 0.86, meanSize);
 
+
+      // reset shadow
       ctx.shadowColor = "transparent"; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
     }
-    function wrapCentered(text, cx, startY, maxWidth, lineH){
-      if(!text) return;
-      const words = text.split(/\s+/);
-      let line="", y=startY, lines=[];
+
+    function wrapToLines(text, font, maxWidth){
+      ctx.save();
+      ctx.font = font;
+      const words = (text||"").split(/\s+/);
+      let line="", lines=[];
       for(const w of words){
-        const t=line?line+" "+w:w;
-        if(ctx.measureText(t).width > maxWidth && line){ lines.push(line); line=w; }
-        else line=t;
+        const t = line ? line+" "+w : w;
+        if(ctx.measureText(t).width > maxWidth && line){
+          lines.push(line); line = w;
+        } else line = t;
       }
       if(line) lines.push(line);
-      ctx.textAlign = "center";
-      for(const ln of lines){ ctx.fillText(ln, cx, y); y+=lineH; }
+      ctx.restore();
+      return lines;
     }
 
     // ===== Excel/CSV parsing =====
     let dataset = []; // [{kanji,hira,meaning}]
     let recIdx = 0;
 
-    const pagerEls = {
-      prevBtn: $("prevBtn"), nextBtn: $("nextBtn")
-    };
+    const pagerEls = { prevBtn: $("prevBtn"), nextBtn: $("nextBtn") };
 
     excelFileEl?.addEventListener("change", async (e)=>{
       const file = e.target.files?.[0];
@@ -477,7 +609,7 @@
         const h=header[i];
         for(const p of picks){ if(p.keys.some(k=>h.includes(k))) p.set(i); }
       }
-      // fallback: giả định thứ tự Kanji, Hiragana, Meaning
+      // fallback: Kanji, Hiragana, Meaning
       if(idxKanji<0 && header.length>=1) idxKanji=0;
       if(idxHira<0  && header.length>=2) idxHira=1;
       if(idxMean<0  && header.length>=3) idxMean=2;
@@ -507,8 +639,8 @@
       dl.classList.add("hidden");
     });
 
-    // ===== Anki Export helpers =====
-    const hanRegex = /\p{Script=Han}/gu; // bắt mọi ký tự Han
+    // ===== Anki Export helpers (giữ nguyên như bản trước của bạn) =====
+    const hanRegex = /\p{Script=Han}/gu;
     function escapeHtml(s){
       return (s??"").replace(/[&<>"']/g, c => (
         { "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]
@@ -521,7 +653,7 @@
     }
     function codepointDecimal(ch){
       const cp = ch.codePointAt(0);
-      return String(cp); // thập phân (không padding)
+      return String(cp);
     }
     function buildStrokeImgsHTML(text){
       const kans = extractHanChars(text);
@@ -542,7 +674,7 @@
       return `<div style="${baseStyle}">${textHTML}${imgsHTML}</div>`;
     }
 
-    // ===== Export TXT (Anki) — 3 thẻ/record, kèm img stroke nếu có kanji trên từng mặt =====
+    // ===== Export TXT (Anki) — 3 thẻ/record, có ảnh stroke cho mỗi mặt nếu có kanji =====
     exportAnkiBtn?.addEventListener("click", ()=>{
       if(!dataset.length){ alert("Chưa có dữ liệu từ Excel/CSV."); return; }
       const lines = [];
@@ -582,7 +714,7 @@
       URL.revokeObjectURL(url);
     });
 
-    // ===== Generate image (manual or excel current row) =====
+    // ===== Generate image =====
     genBtn.addEventListener("click", async ()=>{
       const apiKey = apiKeyEl.value.trim();
       if(!apiKey){ alert("Vui lòng nhập GIPHY API key."); return; }
@@ -620,14 +752,14 @@
       }
       overlaysOnly();
 
-      // Texts
+      // Texts (CÓ nền sáng sau chữ)
       drawTextsCenter(kanjiText, hira, meaning);
 
       // Kanji strokes panel (~1/3 height)
       const kanjiList = [...kanjiText].filter(ch=>/\S/.test(ch));
       await drawKanjiPanel(kanjiList);
 
-      // Enable download
+      // Download
       const name = [kanjiText, hira, meaning].filter(Boolean).join("_");
       const safe = (name || "flashcard").toLowerCase()
         .replace(/[^\p{L}\p{N}_-]+/gu,'-').replace(/-+/g,'-');
